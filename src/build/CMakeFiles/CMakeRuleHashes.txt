@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+97f479e0b11e29e37cd176aeb54880b0 CMakeFiles/klamav_autogen
+9cb6b1af2546f385bfa4c4b6326e737c klamav_autogen/timestamp

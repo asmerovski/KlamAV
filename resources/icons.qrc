@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="org.klamav.KlamAV.svg">../data/icons/org.klamav.KlamAV.svg</file>
+  </qresource>
+</RCC>

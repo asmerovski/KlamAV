@@ -25,6 +25,21 @@ Install the application and its desktop launcher with:
 cmake --install build --prefix ~/.local
 ```
 
+## Arch Linux package
+
+Build a package from the latest GitHub `main` branch with `makepkg -si`:
+
+```sh
+makepkg -si
+```
+
+The generated package installs the app-specific hicolor icon and KDE desktop
+entry in the standard `/usr/share` locations.
+
+KlamAV also installs a Dolphin context-menu action. Select files or folders,
+right-click, and choose **Scan with KlamAV**. The app opens to the scan page and
+starts scanning the selected paths.
+
 ## Notes
 
 - Scans enumerate files in the background and send bounded concurrent requests

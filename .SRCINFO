@@ -1,0 +1,19 @@
+pkgbase = klamav-git
+	pkgdesc = KDE-friendly ClamAV antivirus frontend
+	pkgver = 1.0.0.r0.g0000000
+	pkgrel = 1
+	url = https://github.com/asmerovski/KlamAV
+	arch = x86_64
+	arch = aarch64
+	license = GPL-3.0-or-later
+	makedepends = cmake
+	makedepends = git
+	depends = clamav
+	depends = qt6-base
+	depends = qt6-svg
+	provides = klamav
+	conflicts = klamav
+	source = KlamAV::git+https://github.com/asmerovski/KlamAV.git#branch=main
+	sha256sums = SKIP
+
+pkgname = klamav-git

@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/asmer/Projects/KlamAV/src/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
