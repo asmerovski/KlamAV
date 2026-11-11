@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=KlamAV
+Comment=ClamAV antivirus frontend
+Exec=klamav
+Icon=security-high
+Terminal=false
+Categories=System;Security;
+StartupNotify=true
