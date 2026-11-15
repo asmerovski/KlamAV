@@ -8,7 +8,7 @@ history, and persistent scan and desktop preferences.
 
 - CMake 3.21 or newer
 - A C++17 compiler
-- Qt 6.4 or newer (Widgets and Concurrent)
+- Qt 6.4 or newer (Widgets, Concurrent, and Test)
 - ClamAV (`clamdscan`, `freshclam`) and a running `clamd` daemon for scanning
 
 ## Build and run
@@ -25,6 +25,18 @@ Install the application and its desktop launcher with:
 cmake --install build --prefix ~/.local
 ```
 
+## Arch Linux package
+
+The package version is read from the `project(... VERSION ...)` value in
+`CMakeLists.txt`, so the PKGBUILD stays in sync with the app version. From the
+project directory, build and install with:
+
+```sh
+makepkg -si
+```
+
+Install `base-devel`, `cmake`, `ninja`, `qt6-base`, and `clamav` first.
+
 ## Notes
 
 - Scans enumerate files in the background and send bounded concurrent requests
@@ -37,6 +49,13 @@ cmake --install build --prefix ~/.local
 - Quarantined files are moved into the app's local data directory and restricted
   to the current user. Restores retain the original permissions and avoid
   overwriting an existing file.
-- Startup login and system tray preferences are supported. Daily and weekly
-  quick scans run while KlamAV is open. Real-time protection is a stored
-  preference and is not activated by this build.
+- Startup login, system tray, and start-minimized preferences are supported.
+  Starting minimized requires an available system tray and the tray icon
+  preference to be enabled. Daily and weekly quick scans use a per-user
+  systemd timer and can run while the window is closed. Scheduled scans require
+  systemd user services and a running ClamAV daemon. Scanning is on demand;
+  real-time protection is not active in this build.
+- Settings can be saved from the page heading when values have changed. The
+  sidebar shows the app version, and active jobs remain visible at the bottom
+  of the window; the tray icon animates and lists running jobs in its tooltip.
+- Build and run the core tests with `ctest --test-dir build --output-on-failure`.
