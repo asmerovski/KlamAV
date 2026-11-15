@@ -1,2 +1,0 @@
-/usr/bin/klamav
-/usr/share/applications/org.klamav.KlamAV.desktop
