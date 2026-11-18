@@ -1,0 +1,197 @@
+name: Package builds
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Read package version
+    runs-on: ubuntu-latest
+    outputs:
+      pkgver: ${{ steps.version.outputs.pkgver }}
+      pkgrel: ${{ steps.version.outputs.pkgrel }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Read version from .SRCINFO
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkgver=$(awk '$1 == "pkgver" { print $3; exit }' .SRCINFO)
+          pkgrel=$(awk '$1 == "pkgrel" { print $3; exit }' .SRCINFO)
+          test -n "$pkgver"
+          test -n "$pkgrel"
+          echo "pkgver=$pkgver" >> "$GITHUB_OUTPUT"
+          echo "pkgrel=$pkgrel" >> "$GITHUB_OUTPUT"
+
+  appimage:
+    name: Build AppImage
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      PKGVER: ${{ needs.version.outputs.pkgver }}
+      PKGREL: ${{ needs.version.outputs.pkgrel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build qt6-base-dev qt6-svg-dev patchelf file wget desktop-file-utils
+      - name: Build and stage application
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+          cmake --build build --parallel
+          DESTDIR="$PWD/AppDir" cmake --install build
+          install -Dm644 LICENSE AppDir/usr/share/licenses/klamav/LICENSE
+      - name: Create AppImage
+        run: |
+          set -euo pipefail
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage -O linuxdeploy-plugin-qt
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          export PATH="$PWD:$PATH"
+          ./linuxdeploy --appimage-extract-and-run --appdir AppDir \
+            --desktop-file data/org.klamav.KlamAV.desktop \
+            --icon-file data/icons/org.klamav.KlamAV.svg \
+            --plugin qt --output appimage
+          appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          test -n "$appimage"
+          mv "$appimage" "KlamAV-${PKGVER}-${PKGREL}-x86_64.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage-${{ env.PKGVER }}-${{ env.PKGREL }}
+          path: KlamAV-${{ env.PKGVER }}-${{ env.PKGREL }}-x86_64.AppImage
+          if-no-files-found: error
+
+  deb:
+    name: Build Debian package
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      PKGVER: ${{ needs.version.outputs.pkgver }}
+      PKGREL: ${{ needs.version.outputs.pkgrel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build qt6-base-dev qt6-svg-dev dpkg-dev
+      - name: Build Debian package
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+          cmake --build build --parallel
+          DESTDIR="$PWD/pkgroot" cmake --install build
+          install -Dm644 LICENSE pkgroot/usr/share/doc/klamav/copyright
+          mkdir -p pkgroot/DEBIAN
+          cat > pkgroot/DEBIAN/control <<EOF
+          Package: klamav
+          Version: ${PKGVER}-${PKGREL}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: clamav, libqt6widgets6, libqt6concurrent6, libqt6svg6
+          Maintainer: KlamAV contributors
+          Description: KDE-friendly ClamAV antivirus frontend
+           Desktop frontend for ClamAV scanning and quarantine management.
+          EOF
+          dpkg-deb --build --root-owner-group pkgroot "klamav_${PKGVER}-${PKGREL}_amd64.deb"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ env.PKGVER }}-${{ env.PKGREL }}
+          path: klamav_${{ env.PKGVER }}-${{ env.PKGREL }}_amd64.deb
+          if-no-files-found: error
+
+  rpm:
+    name: Build RPM package
+    needs: version
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    env:
+      PKGVER: ${{ needs.version.outputs.pkgver }}
+      PKGREL: ${{ needs.version.outputs.pkgrel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: dnf install -y cmake gcc-c++ ninja-build qt6-qtbase-devel qt6-qtsvg-devel rpm-build
+      - name: Build RPM package
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=OFF
+          cmake --build build --parallel
+          DESTDIR="$PWD/rpmroot" cmake --install build
+          install -Dm644 LICENSE rpmroot/usr/share/licenses/klamav/LICENSE
+          mkdir -p "$PWD/rpmbuild"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cat > rpmbuild/SPECS/klamav.spec <<EOF
+          Name:           klamav
+          Version:        ${PKGVER}
+          Release:        ${PKGREL}%{?dist}
+          Summary:        KDE-friendly ClamAV antivirus frontend
+          License:        GPL-3.0-or-later
+          BuildArch:      x86_64
+          Requires:       clamav
+          Requires:       qt6-qtbase
+          Requires:       qt6-qtsvg
+
+          %description
+          Desktop frontend for ClamAV scanning and quarantine management.
+
+          %prep
+
+          %build
+
+          %install
+          mkdir -p %{buildroot}
+          cp -a "$PWD/rpmroot/." %{buildroot}/
+
+          %files
+          %license /usr/share/licenses/klamav/LICENSE
+          /usr/bin/klamav
+          /usr/share/applications/org.klamav.KlamAV.desktop
+          /usr/share/icons/hicolor/scalable/apps/org.klamav.KlamAV.svg
+          /usr/share/kio/servicemenus/klamav-scan.desktop
+          EOF
+          rpmbuild -bb --define "_topdir $PWD/rpmbuild" rpmbuild/SPECS/klamav.spec
+          find rpmbuild/RPMS -type f -name '*.rpm' -exec cp {} . \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-${{ env.PKGVER }}-${{ env.PKGREL }}
+          path: '*.rpm'
+          if-no-files-found: error
+
+  arch:
+    name: Build Arch package
+    needs: version
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    env:
+      PKGVER: ${{ needs.version.outputs.pkgver }}
+      PKGREL: ${{ needs.version.outputs.pkgrel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed base-devel cmake git ninja qt6-base qt6-svg clamav sudo
+      - name: Build Arch package
+        run: |
+          set -euo pipefail
+          useradd --create-home builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chmod 0440 /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          runuser -u builder -- makepkg --noconfirm --syncdeps --holdver
+          mkdir -p artifacts
+          cp ./*.pkg.tar.* artifacts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-${{ env.PKGVER }}-${{ env.PKGREL }}
+          path: artifacts/*.pkg.tar.*
+          if-no-files-found: error
