@@ -218,4 +218,4 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
-          gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          gh release upload "$GITHUB_REF_NAME" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
