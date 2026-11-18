@@ -3,6 +3,8 @@ name: Package builds
 on:
   push:
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -195,3 +197,25 @@ jobs:
           name: arch-${{ env.PKGVER }}-${{ env.PKGREL }}
           path: artifacts/*.pkg.tar.*
           if-no-files-found: error
+
+  attach-release-assets:
+    name: Attach packages to GitHub release
+    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: [appimage, deb, rpm, arch]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: release-assets
+          merge-multiple: true
+      - name: Upload packages to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -n "$(find release-assets -maxdepth 1 -type f -print -quit)"
+          gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
